@@ -63,6 +63,9 @@ public class ReservationServiceImpl implements ReservationService {
         reservation.setCarId(car.getId());
         reservation.setSpotId(parkingSpot.getId());
         reservation.setStartTime(LocalDateTime.now());
+        if (reservation.getCreatedAt() == null) {
+            reservation.setCreatedAt(LocalDateTime.now());
+        }
         reservation.setStatus("ACTIVE");
         reservation.setIsPaid(false);
 

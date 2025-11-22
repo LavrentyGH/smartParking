@@ -1,8 +1,11 @@
 package com.parking.parkingmanagement.controller;
 
+import com.parking.parkingmanagement.dto.ApiResponse;
+import com.parking.parkingmanagement.dto.CreateReservationRequest;
 import com.parking.parkingmanagement.entity.Reservation;
 import com.parking.parkingmanagement.service.ReservationService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,8 +34,14 @@ public class ReservationController {
     }
 
     @PostMapping
-    public Reservation createReservation(@Valid @RequestBody Reservation reservation) {
-        return reservationService.createReservation(reservation);
+    public ResponseEntity<ApiResponse<Reservation>> createReservation(
+            @Valid @RequestBody CreateReservationRequest request) {
+        Reservation reservation = new Reservation();
+        reservation.setCarId(request.getCarId());
+        reservation.setSpotId(request.getSpotId());
+        Reservation createdReservation = reservationService.createReservation(reservation);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(createdReservation, "Бронирование успешно создано"));
     }
 
     @PutMapping("/{id}/pay")

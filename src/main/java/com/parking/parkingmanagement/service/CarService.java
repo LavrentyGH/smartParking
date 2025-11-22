@@ -1,5 +1,6 @@
 package com.parking.parkingmanagement.service;
 
+import com.parking.parkingmanagement.dto.CreateCarRequest;
 import com.parking.parkingmanagement.entity.Car;
 
 import java.util.List;
@@ -9,7 +10,7 @@ public interface CarService {
 
     Car getCarById(Long id);
 
-    Car createCar(Car car);
+    Car createCar(CreateCarRequest createCarRequest);
 
     Car updateCar(Long id, Car carDetails);
 

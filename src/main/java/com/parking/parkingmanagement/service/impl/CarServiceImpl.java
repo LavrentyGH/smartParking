@@ -1,5 +1,6 @@
 package com.parking.parkingmanagement.service.impl;
 
+import com.parking.parkingmanagement.dto.CreateCarRequest;
 import com.parking.parkingmanagement.entity.Car;
 import com.parking.parkingmanagement.entity.Owner;
 import com.parking.parkingmanagement.repository.CarRepository;
@@ -8,6 +9,7 @@ import com.parking.parkingmanagement.service.OwnerService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -35,14 +37,17 @@ public class CarServiceImpl implements CarService {
     }
 
     @Override
-    public Car createCar(Car car) {
-        if (carRepository.existsByLicensePlate(car.getLicensePlate())) {
-            throw new RuntimeException("Автомобиль с таким номером уже существует");
+    public Car createCar(CreateCarRequest createCarRequest) {
+        if (carRepository.findByLicensePlate(createCarRequest.getLicensePlate()).contains(createCarRequest.getLicensePlate())) {
+            throw new RuntimeException("Car with license plate " + createCarRequest.getLicensePlate() + " already exists");
         }
 
-        Owner owner = ownerService.getOwnerById(car.getOwnerId());
+        Owner owner = ownerService.getOwnerById(createCarRequest.getOwnerId());
 
+        Car car = new Car();
+        car.setLicensePlate(createCarRequest.getLicensePlate());
         car.setOwnerId(owner.getId());
+        car.setCreatedAt(LocalDateTime.now());
         return carRepository.save(car);
     }
 

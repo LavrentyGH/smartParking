@@ -7,6 +7,7 @@ import com.parking.parkingmanagement.service.ParkingSpotService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -35,6 +36,7 @@ public class ParkingSpotServiceImpl implements ParkingSpotService {
         if (parkingSpotRepository.existsBySpotNumber(parkingSpot.getSpotNumber())) {
             throw new RuntimeException("Парковочное место с таким номером уже существует");
         }
+        parkingSpot.setCreatedAt(LocalDateTime.now());
         return parkingSpotRepository.save(parkingSpot);
     }
 

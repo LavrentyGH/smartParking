@@ -5,6 +5,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,8 +26,11 @@ public class ReservationRepository {
         reservation.setSpotId(rs.getLong("spot_id"));
         reservation.setStartTime(rs.getTimestamp("start_time").toLocalDateTime());
 
-        if (rs.getTimestamp("end_time") != null) {
-            reservation.setEndTime(rs.getTimestamp("end_time").toLocalDateTime());
+        if (rs.getTimestamp("created_at") != null) {
+            reservation.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
+        } else {
+            // Если created_at null, устанавливаем текущее время
+            reservation.setCreatedAt(LocalDateTime.now());
         }
 
         reservation.setIsPaid(rs.getBoolean("is_paid"));
@@ -103,13 +108,14 @@ public class ReservationRepository {
     public Reservation save(Reservation reservation) {
         if (reservation.getId() == null) {
             String sql = """
-                INSERT INTO reservations (car_id, spot_id, start_time, end_time, is_paid, status) 
-                VALUES (?, ?, ?, ?, ?, ?) RETURNING id
+                INSERT INTO reservations (car_id, spot_id, start_time, end_time, is_paid, status, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id
                 """;
             Long id = jdbcTemplate.queryForObject(sql, Long.class,
                     reservation.getCarId(), reservation.getSpotId(),
                     reservation.getStartTime(), reservation.getEndTime(),
-                    reservation.getIsPaid(), reservation.getStatus());
+                    reservation.getIsPaid(), reservation.getStatus(),
+                    Timestamp.valueOf(reservation.getCreatedAt()));
             reservation.setId(id);
         } else {
             String sql = """

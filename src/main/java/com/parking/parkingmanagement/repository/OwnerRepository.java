@@ -5,6 +5,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,8 +44,10 @@ public class OwnerRepository {
 
     public Owner save(Owner owner) {
         if (owner.getId() == null) {
-            String sql = "INSERT INTO owners (full_name) VALUES (?) RETURNING id";
-            Long id = jdbcTemplate.queryForObject(sql, Long.class, owner.getFullName());
+            String sql = "INSERT INTO owners (full_name, created_at) VALUES (?, ?) RETURNING id";
+            Long id = jdbcTemplate.queryForObject(sql, Long.class,
+                    owner.getFullName(),
+                    Timestamp.valueOf(owner.getCreatedAt()));
             owner.setId(id);
         } else {
             String sql = "UPDATE owners SET full_name = ? WHERE id = ?";

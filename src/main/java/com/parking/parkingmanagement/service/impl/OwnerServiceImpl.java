@@ -7,6 +7,7 @@ import com.parking.parkingmanagement.service.OwnerService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -35,6 +36,7 @@ public class OwnerServiceImpl implements OwnerService {
         if (ownerRepository.existsByFullName(owner.getFullName())) {
             throw new RuntimeException("Владелец с таким ФИО уже существует");
         }
+        owner.setCreatedAt(LocalDateTime.now());
         return ownerRepository.save(owner);
     }
 
