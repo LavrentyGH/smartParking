@@ -1,5 +1,6 @@
 package com.parking.parkingmanagement.repository;
 
+import com.parking.parkingmanagement.dto.PagedResponse;
 import com.parking.parkingmanagement.entity.Car;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -24,11 +25,9 @@ public class CarRepository {
         car.setOwnerId(rs.getLong("owner_id"));
         car.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
 
-        // Для JOIN запросов
         try {
-            car.setOwnerFullName(rs.getString("owner_name"));
-        } catch (Exception e) {
-            // Игнорируем если колонки нет
+            car.setOwnerFullName(rs.getString("full_name"));
+        } catch (Exception ignored) {
         }
 
         return car;
@@ -36,9 +35,9 @@ public class CarRepository {
 
     public List<Car> findAllWithOwner() {
         String sql = """
-            SELECT c.*, o.full_name as owner_name 
-            FROM cars c 
-            LEFT JOIN owners o ON c.owner_id = o.id 
+            SELECT c.*, o.full_name as owner_name
+            FROM cars c
+            LEFT JOIN owners o ON c.owner_id = o.id
             ORDER BY c.created_at DESC
             """;
         return jdbcTemplate.query(sql, rowMapper);
@@ -50,9 +49,10 @@ public class CarRepository {
         return cars.stream().findFirst();
     }
 
-    public List<Car> findByLicensePlate(String licensePlate) {
-        String sql = "SELECT * FROM cars WHERE license_plate ILIKE ? ORDER BY license_plate";
-        return jdbcTemplate.query(sql, rowMapper, "%" + licensePlate + "%");
+    public Optional<Car> findByLicensePlate(String licensePlate) {
+        String sql = "SELECT * FROM cars WHERE license_plate = ?";
+        List<Car> cars = jdbcTemplate.query(sql, rowMapper, licensePlate);
+        return cars.stream().findFirst();
     }
 
     public Car save(Car car) {
@@ -79,9 +79,21 @@ public class CarRepository {
         return count != null && count > 0;
     }
 
-    public Optional<Car> findByLicensePlateExact(String licensePlate) {
-        String sql = "SELECT * FROM cars WHERE license_plate = ?";
-        List<Car> cars = jdbcTemplate.query(sql, rowMapper, licensePlate);
-        return cars.stream().findFirst();
+    public PagedResponse<Car> findAllPaged(int page, int size) {
+        int offset = page * size;
+
+        String sql = """
+            SELECT c.*, o.full_name
+            FROM cars c
+            LEFT JOIN owners o ON c.owner_id = o.id
+            ORDER BY c.created_at DESC LIMIT ? OFFSET ?
+            """;
+        List<Car> content = jdbcTemplate.query(sql, rowMapper, size, offset);
+
+        String countSql = "SELECT COUNT(*) FROM cars";
+        Long totalItems = jdbcTemplate.queryForObject(countSql, Long.class);
+        int totalPages = (int) Math.ceil((double) totalItems / size);
+
+        return new PagedResponse<>(content, page, totalPages, totalItems, size);
     }
 }

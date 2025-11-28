@@ -1,10 +1,13 @@
 package com.parking.parkingmanagement.repository;
 
+import com.parking.parkingmanagement.dto.PagedResponse;
+import com.parking.parkingmanagement.dto.parkingspot.ParkingSpotDTO;
 import com.parking.parkingmanagement.entity.ParkingSpot;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,6 +29,28 @@ public class ParkingSpotRepository {
         return spot;
     };
 
+    private final RowMapper<ParkingSpotDTO> spotDTORowMapper = (rs, rowNum) -> {
+        ParkingSpotDTO spot = new ParkingSpotDTO();
+        spot.setId(rs.getLong("id"));
+        spot.setSpotNumber(rs.getString("spot_number"));
+        spot.setIsAvailable(rs.getBoolean("is_available"));
+        spot.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
+        return spot;
+    };
+
+    public PagedResponse<ParkingSpot> findAllPaged(int page, int size) {
+        int offset = page * size;
+
+        String sql = "SELECT * FROM parking_spots ORDER BY spot_number LIMIT ? OFFSET ?";
+        List<ParkingSpot> content = jdbcTemplate.query(sql, rowMapper, size, offset);
+
+        String countSql = "SELECT COUNT(*) FROM parking_spots";
+        Long totalItems = jdbcTemplate.queryForObject(countSql, Long.class);
+        int totalPages = (int) Math.ceil((double) totalItems / size);
+
+        return new PagedResponse<>(content, page, totalPages, totalItems, size);
+    }
+
     public List<ParkingSpot> findAll() {
         String sql = "SELECT * FROM parking_spots ORDER BY spot_number";
         return jdbcTemplate.query(sql, rowMapper);
@@ -45,10 +70,10 @@ public class ParkingSpotRepository {
 
     public List<ParkingSpot> findAvailableSpots() {
         String sql = """
-            SELECT ps.* FROM parking_spots ps 
-            WHERE ps.is_available = true 
+            SELECT ps.* FROM parking_spots ps
+            WHERE ps.is_available = true
             AND ps.id NOT IN (
-                SELECT r.spot_id FROM reservations r 
+                SELECT r.spot_id FROM reservations r
                 WHERE r.status = 'ACTIVE'
             )
             ORDER BY ps.spot_number
@@ -58,9 +83,9 @@ public class ParkingSpotRepository {
 
     public ParkingSpot save(ParkingSpot spot) {
         if (spot.getId() == null) {
-            String sql = "INSERT INTO parking_spots (spot_number, is_available) VALUES (?, ?) RETURNING id";
+            String sql = "INSERT INTO parking_spots (spot_number, is_available, created_at) VALUES (?, ?, ?) RETURNING id";
             Long id = jdbcTemplate.queryForObject(sql, Long.class,
-                    spot.getSpotNumber(), spot.getIsAvailable());
+                    spot.getSpotNumber(), spot.getIsAvailable(), Timestamp.valueOf(spot.getCreatedAt()));
             spot.setId(id);
         } else {
             String sql = "UPDATE parking_spots SET spot_number = ?, is_available = ? WHERE id = ?";

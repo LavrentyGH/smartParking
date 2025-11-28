@@ -1,8 +1,9 @@
 package com.parking.parkingmanagement.controller;
 
 import com.parking.parkingmanagement.dto.ApiResponse;
-import com.parking.parkingmanagement.dto.CreateReservationRequest;
-import com.parking.parkingmanagement.entity.Reservation;
+import com.parking.parkingmanagement.dto.PagedResponse;
+import com.parking.parkingmanagement.dto.reservation.CreateReservationRequest;
+import com.parking.parkingmanagement.dto.reservation.ReservationDTO;
 import com.parking.parkingmanagement.service.ReservationService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -22,60 +23,71 @@ public class ReservationController {
         this.reservationService = reservationService;
     }
 
+    @GetMapping("/paged")
+    public ApiResponse<PagedResponse<ReservationDTO>> getReservationsPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        PagedResponse<ReservationDTO> reservations = reservationService.findAllPaged(page, size);
+        return ApiResponse.success(reservations, "Бронирования получены успешно");
+    }
+
     @GetMapping
-    public List<Reservation> getAllReservations() {
-        return reservationService.getAllReservations();
+    public ApiResponse<List<ReservationDTO>> getAllReservations() {
+        List<ReservationDTO> reservations = reservationService.getAllReservations();
+        return ApiResponse.success(reservations, "Бронирования получены успешно");
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Reservation> getReservationById(@PathVariable Long id) {
-        Reservation reservation = reservationService.getReservationById(id);
-        return ResponseEntity.ok(reservation);
+    public ApiResponse<ReservationDTO> getReservationById(@PathVariable Long id) {
+        ReservationDTO reservation = reservationService.getReservationById(id);
+        return ApiResponse.success(reservation, "Бронирование найдено");
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<Reservation>> createReservation(
+    public ResponseEntity<ApiResponse<ReservationDTO>> createReservation(
             @Valid @RequestBody CreateReservationRequest request) {
-        Reservation reservation = new Reservation();
-        reservation.setCarId(request.getCarId());
-        reservation.setSpotId(request.getSpotId());
-        Reservation createdReservation = reservationService.createReservation(reservation);
+        ReservationDTO reservation = reservationService.createReservation(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(createdReservation, "Бронирование успешно создано"));
+                .body(ApiResponse.success(reservation, "Бронирование успешно создано"));
     }
 
     @PutMapping("/{id}/pay")
-    public Reservation markAsPaid(@PathVariable Long id) {
-        return reservationService.markAsPaid(id);
+    public ApiResponse<ReservationDTO> markAsPaid(@PathVariable Long id) {
+        ReservationDTO reservation = reservationService.markAsPaid(id);
+        return ApiResponse.success(reservation, "Бронирование оплачено");
     }
 
     @PutMapping("/{id}/free")
-    public Reservation freeSpot(@PathVariable Long id) {
-        return reservationService.freeSpot(id);
+    public ApiResponse<ReservationDTO> freeSpot(@PathVariable Long id) {
+        ReservationDTO reservation = reservationService.freeSpot(id);
+        return ApiResponse.success(reservation, "Парковочное место освобождено");
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> cancelReservation(@PathVariable Long id) {
+    public ApiResponse<Void> cancelReservation(@PathVariable Long id) {
         reservationService.cancelReservation(id);
-        return ResponseEntity.ok().build();
+        return ApiResponse.success(null, "Бронирование отменено");
     }
 
     @GetMapping("/search")
-    public List<Reservation> searchReservations(
+    public ApiResponse<List<ReservationDTO>> searchReservations(
             @RequestParam(required = false) String licensePlate,
             @RequestParam(required = false) String ownerName) {
 
+        List<ReservationDTO> reservations;
         if (licensePlate != null && !licensePlate.trim().isEmpty()) {
-            return reservationService.searchByCarLicensePlate(licensePlate);
+            reservations = reservationService.searchByCarLicensePlate(licensePlate);
         } else if (ownerName != null && !ownerName.trim().isEmpty()) {
-            return reservationService.searchByOwnerFullName(ownerName);
+            reservations = reservationService.searchByOwnerFullName(ownerName);
         } else {
-            return reservationService.getAllReservations();
+            reservations = reservationService.getAllReservations();
         }
+        return ApiResponse.success(reservations, "Поиск завершен");
     }
 
     @GetMapping("/active")
-    public List<Reservation> getActiveReservations() {
-        return reservationService.getActiveReservations();
+    public ApiResponse<List<ReservationDTO>> getActiveReservations() {
+        List<ReservationDTO> reservations = reservationService.getActiveReservations();
+        return ApiResponse.success(reservations, "Активные бронирования получены");
     }
 }

@@ -1,7 +1,14 @@
 package com.parking.parkingmanagement.service.impl;
 
 
+import com.parking.parkingmanagement.dto.PagedResponse;
+import com.parking.parkingmanagement.dto.parkingspot.CreateParkingSpotRequest;
+import com.parking.parkingmanagement.dto.parkingspot.ParkingSpotDTO;
+import com.parking.parkingmanagement.dto.parkingspot.UpdateParkingSpotRequest;
 import com.parking.parkingmanagement.entity.ParkingSpot;
+import com.parking.parkingmanagement.exception.ParkingSpotAlreadyExistsException;
+import com.parking.parkingmanagement.exception.ParkingSpotNotFoundException;
+import com.parking.parkingmanagement.mapper.ParkingSpotMapper;
 import com.parking.parkingmanagement.repository.ParkingSpotRepository;
 import com.parking.parkingmanagement.service.ParkingSpotService;
 import org.springframework.stereotype.Service;
@@ -15,66 +22,108 @@ import java.util.List;
 public class ParkingSpotServiceImpl implements ParkingSpotService {
 
     private final ParkingSpotRepository parkingSpotRepository;
+    private final ParkingSpotMapper parkingSpotMapper;
 
-    public ParkingSpotServiceImpl(ParkingSpotRepository parkingSpotRepository) {
+    public ParkingSpotServiceImpl(ParkingSpotRepository parkingSpotRepository,
+                                  ParkingSpotMapper parkingSpotMapper) {
         this.parkingSpotRepository = parkingSpotRepository;
+        this.parkingSpotMapper = parkingSpotMapper;
     }
 
     @Override
-    public List<ParkingSpot> getAllParkingSpots() {
-        return parkingSpotRepository.findAll();
+    public PagedResponse<ParkingSpotDTO> findAllPaged(int page, int size) {
+        PagedResponse<ParkingSpot> spotPage = parkingSpotRepository.findAllPaged(page, size);
+        List<ParkingSpotDTO> spotDTOs = spotPage.getContent().stream()
+                .map(parkingSpotMapper::toParkingSpotDto)
+                .toList();
+
+        return new PagedResponse<>(spotDTOs,
+                spotPage.getCurrentPage(),
+                spotPage.getTotalPages(),
+                spotPage.getTotalItems(),
+                spotPage.getPageSize());
     }
 
     @Override
-    public ParkingSpot getParkingSpotById(Long id) {
-        return parkingSpotRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Парковочное место не найдено с id: " + id));
-    }
-
-    @Override
-    public ParkingSpot createParkingSpot(ParkingSpot parkingSpot) {
-        if (parkingSpotRepository.existsBySpotNumber(parkingSpot.getSpotNumber())) {
-            throw new RuntimeException("Парковочное место с таким номером уже существует");
+    public List<ParkingSpotDTO> getAllParkingSpots() {
+        List<ParkingSpot> spots = parkingSpotRepository.findAll();
+        if (spots.isEmpty()) {
+            throw new ParkingSpotNotFoundException("Парковочные места не найдены");
         }
-        parkingSpot.setCreatedAt(LocalDateTime.now());
-        return parkingSpotRepository.save(parkingSpot);
+        return spots.stream().map(parkingSpotMapper::toParkingSpotDto).toList();
     }
 
     @Override
-    public ParkingSpot updateParkingSpot(Long id, ParkingSpot parkingSpotDetails) {
-        ParkingSpot parkingSpot = getParkingSpotById(id);
+    public ParkingSpotDTO getParkingSpotById(Long id) {
+        ParkingSpot spot = parkingSpotRepository.findById(id)
+                .orElseThrow(() -> new ParkingSpotNotFoundException(id));
+        return parkingSpotMapper.toParkingSpotDto(spot);
+    }
 
-        if (!parkingSpot.getSpotNumber().equals(parkingSpotDetails.getSpotNumber()) &&
-                parkingSpotRepository.existsBySpotNumber(parkingSpotDetails.getSpotNumber())) {
-            throw new RuntimeException("Парковочное место с таким номером уже существует");
+    @Override
+    public ParkingSpotDTO createParkingSpot(CreateParkingSpotRequest createRequest) {
+        if (parkingSpotRepository.existsBySpotNumber(createRequest.getSpotNumber())) {
+            throw new ParkingSpotAlreadyExistsException(createRequest.getSpotNumber());
         }
 
-        parkingSpot.setSpotNumber(parkingSpotDetails.getSpotNumber());
-        parkingSpot.setIsAvailable(parkingSpotDetails.getIsAvailable());
+        ParkingSpot spot = new ParkingSpot();
+        spot.setSpotNumber(createRequest.getSpotNumber());
+        spot.setIsAvailable(createRequest.getIsAvailable());
+        spot.setCreatedAt(LocalDateTime.now());
 
-        return parkingSpotRepository.save(parkingSpot);
+        ParkingSpot savedSpot = parkingSpotRepository.save(spot);
+        return parkingSpotMapper.toParkingSpotDto(savedSpot);
+    }
+
+    @Override
+    public ParkingSpotDTO updateParkingSpot(Long id, UpdateParkingSpotRequest updateRequest) {
+        ParkingSpot spot = parkingSpotRepository.findById(id)
+                .orElseThrow(() -> new ParkingSpotNotFoundException(id));
+
+        if (!spot.getSpotNumber().equals(updateRequest.getSpotNumber()) &&
+            parkingSpotRepository.existsBySpotNumber(updateRequest.getSpotNumber())) {
+            throw new ParkingSpotAlreadyExistsException(updateRequest.getSpotNumber());
+        }
+
+        spot.setSpotNumber(updateRequest.getSpotNumber());
+        spot.setIsAvailable(updateRequest.getIsAvailable());
+
+        ParkingSpot updatedSpot = parkingSpotRepository.save(spot);
+        return parkingSpotMapper.toParkingSpotDto(updatedSpot);
     }
 
     @Override
     public void deleteParkingSpot(Long id) {
+        if (!parkingSpotRepository.findById(id).isPresent()) {
+            throw new ParkingSpotNotFoundException(id);
+        }
         parkingSpotRepository.deleteById(id);
     }
 
     @Override
-    public List<ParkingSpot> getAvailableParkingSpots() {
-        return parkingSpotRepository.findAvailableSpots();
+    public List<ParkingSpotDTO> getAvailableParkingSpots() {
+        List<ParkingSpot> spots = parkingSpotRepository.findAvailableSpots();
+        if (spots.isEmpty()) {
+            throw new ParkingSpotNotFoundException("Доступные парковочные места не найдены");
+        }
+        return spots.stream().map(parkingSpotMapper::toParkingSpotDto).toList();
     }
 
     @Override
-    public ParkingSpot updateAvailability(Long id, Boolean isAvailable) {
-        ParkingSpot parkingSpot = getParkingSpotById(id);
-        parkingSpot.setIsAvailable(isAvailable);
-        return parkingSpotRepository.save(parkingSpot);
+    public ParkingSpotDTO updateAvailability(Long id, Boolean isAvailable) {
+        ParkingSpot spot = parkingSpotRepository.findById(id)
+                .orElseThrow(() -> new ParkingSpotNotFoundException(id));
+
+        spot.setIsAvailable(isAvailable);
+        ParkingSpot updatedSpot = parkingSpotRepository.save(spot);
+        return parkingSpotMapper.toParkingSpotDto(updatedSpot);
     }
 
     @Override
-    public ParkingSpot findBySpotNumber(String spotNumber) {
-        return parkingSpotRepository.findBySpotNumber(spotNumber)
-                .orElseThrow(() -> new RuntimeException("Парковочное место не найдено: " + spotNumber));
+    public ParkingSpotDTO findBySpotNumber(String spotNumber) {
+        ParkingSpot spot = parkingSpotRepository.findBySpotNumber(spotNumber)
+                .orElseThrow(() -> new ParkingSpotNotFoundException(
+                        "Парковочное место с номером " + spotNumber + " не найдено"));
+        return parkingSpotMapper.toParkingSpotDto(spot);
     }
 }

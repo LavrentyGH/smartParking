@@ -1,8 +1,14 @@
 package com.parking.parkingmanagement.service.impl;
 
-import com.parking.parkingmanagement.entity.Car;
-import com.parking.parkingmanagement.entity.ParkingSpot;
+import com.parking.parkingmanagement.dto.PagedResponse;
+import com.parking.parkingmanagement.dto.parkingspot.ParkingSpotDTO;
+import com.parking.parkingmanagement.dto.reservation.CreateReservationRequest;
+import com.parking.parkingmanagement.dto.reservation.ReservationDTO;
 import com.parking.parkingmanagement.entity.Reservation;
+import com.parking.parkingmanagement.exception.ParkingSpotNotAvailableException;
+import com.parking.parkingmanagement.exception.ReservationAlreadyExistsException;
+import com.parking.parkingmanagement.exception.ReservationNotFoundException;
+import com.parking.parkingmanagement.mapper.ReservationMapper;
 import com.parking.parkingmanagement.repository.ReservationRepository;
 import com.parking.parkingmanagement.service.CarService;
 import com.parking.parkingmanagement.service.ParkingSpotService;
@@ -18,120 +24,160 @@ import java.util.List;
 public class ReservationServiceImpl implements ReservationService {
 
     private final ReservationRepository reservationRepository;
-
     private final CarService carService;
-
     private final ParkingSpotService parkingSpotService;
+    private final ReservationMapper reservationMapper;
 
-    public ReservationServiceImpl(ReservationRepository reservationRepository, CarService carService, ParkingSpotService parkingSpotService) {
+    public ReservationServiceImpl(ReservationRepository reservationRepository,
+                                  CarService carService,
+                                  ParkingSpotService parkingSpotService,
+                                  ReservationMapper reservationMapper) {
         this.reservationRepository = reservationRepository;
         this.carService = carService;
         this.parkingSpotService = parkingSpotService;
+        this.reservationMapper = reservationMapper;
     }
 
     @Override
-    public List<Reservation> getAllReservations() {
-        return reservationRepository.findAllActiveWithCarAndOwner();
+    public PagedResponse<ReservationDTO> findAllPaged(int page, int size) {
+        // Используем существующий метод, но с пагинацией
+        List<Reservation> reservations = reservationRepository.findAllActiveWithCarAndOwner();
+
+        // Применяем пагинацию вручную (или можно добавить в репозиторий)
+        int start = page * size;
+        int end = Math.min(start + size, reservations.size());
+        List<Reservation> pagedContent = reservations.subList(start, end);
+
+        List<ReservationDTO> reservationDTOs = pagedContent.stream()
+                .map(reservationMapper::toDTO)
+                .toList();
+
+        int totalPages = (int) Math.ceil((double) reservations.size() / size);
+
+        return new PagedResponse<>(reservationDTOs, page, totalPages, (long) reservations.size(), size);
     }
 
     @Override
-    public Reservation getReservationById(Long id) {
-        return reservationRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Бронирование не найдено с id: " + id));
+    public List<ReservationDTO> getAllReservations() {
+        List<Reservation> reservations = reservationRepository.findAllActiveWithCarAndOwner();
+        if (reservations.isEmpty()) {
+            throw new ReservationNotFoundException("Бронирования не найдены");
+        }
+        return reservations.stream().map(reservationMapper::toDTO).toList();
     }
 
     @Override
-    public Reservation createReservation(Reservation reservation) {
+    public ReservationDTO getReservationById(Long id) {
+        Reservation reservation = reservationRepository.findById(id)
+                .orElseThrow(() -> new ReservationNotFoundException(id));
+        return reservationMapper.toDTO(reservation);
+    }
+
+    @Override
+    public ReservationDTO createReservation(CreateReservationRequest request) {
         // Проверяем существование автомобиля
-        Car car = carService.getCarById(reservation.getCarId());
+        carService.getCarById(request.getCarId());
 
         // Проверяем существование парковочного места
-        ParkingSpot parkingSpot = parkingSpotService.getParkingSpotById(reservation.getSpotId());
+        ParkingSpotDTO parkingSpot = parkingSpotService.getParkingSpotById(request.getSpotId());
 
         // Проверяем доступность места
         if (!parkingSpot.getIsAvailable()) {
-            throw new RuntimeException("Парковочное место недоступно для бронирования");
+            throw new ParkingSpotNotAvailableException("Парковочное место недоступно для бронирования");
         }
 
         // Проверяем нет ли активного бронирования для этого автомобиля
-        reservationRepository.findByCarIdAndStatus(car.getId(), "ACTIVE")
+        reservationRepository.findByCarIdAndStatus(request.getCarId(), "ACTIVE")
                 .ifPresent(existingReservation -> {
-                    throw new RuntimeException("У этого автомобиля уже есть активное бронирование");
+                    throw new ReservationAlreadyExistsException("У этого автомобиля уже есть активное бронирование");
                 });
 
-        // Устанавливаем связи
-        reservation.setCarId(car.getId());
-        reservation.setSpotId(parkingSpot.getId());
+        // Создаем бронирование
+        Reservation reservation = new Reservation();
+        reservation.setCarId(request.getCarId());
+        reservation.setSpotId(request.getSpotId());
         reservation.setStartTime(LocalDateTime.now());
-        if (reservation.getCreatedAt() == null) {
-            reservation.setCreatedAt(LocalDateTime.now());
-        }
+        reservation.setCreatedAt(LocalDateTime.now());
         reservation.setStatus("ACTIVE");
         reservation.setIsPaid(false);
 
         // Помечаем место как занятое
         parkingSpot.setIsAvailable(false);
-        parkingSpotService.updateParkingSpot(reservation.getSpotId(), parkingSpot);
+        parkingSpotService.updateAvailability(request.getSpotId(), false);
 
-        return reservationRepository.save(reservation);
+        Reservation savedReservation = reservationRepository.save(reservation);
+        return reservationMapper.toDTO(savedReservation);
     }
 
     @Override
-    public Reservation markAsPaid(Long id) {
-        Reservation reservation = getReservationById(id);
+    public ReservationDTO markAsPaid(Long id) {
+        Reservation reservation = reservationRepository.findById(id)
+                .orElseThrow(() -> new ReservationNotFoundException(id));
 
         if (!"ACTIVE".equals(reservation.getStatus())) {
-            throw new RuntimeException("Можно оплатить только активное бронирование");
+            throw new IllegalStateException("Можно оплатить только активное бронирование");
         }
 
         reservation.setIsPaid(true);
-        return reservationRepository.save(reservation);
+        Reservation updatedReservation = reservationRepository.save(reservation);
+        return reservationMapper.toDTO(updatedReservation);
     }
 
     @Override
-    public Reservation freeSpot(Long id) {
-        Reservation reservation = getReservationById(id);
+    public ReservationDTO freeSpot(Long id) {
+        Reservation reservation = reservationRepository.findById(id)
+                .orElseThrow(() -> new ReservationNotFoundException(id));
 
         if (!"ACTIVE".equals(reservation.getStatus())) {
-            throw new RuntimeException("Можно освободить только активное бронирование");
+            throw new IllegalStateException("Можно освободить только активное бронирование");
         }
 
         // Освобождаем парковочное место
-        ParkingSpot parkingSpot = parkingSpotService.getParkingSpotById(reservation.getSpotId());
-        parkingSpot.setIsAvailable(true);
-        parkingSpotService.updateParkingSpot(reservation.getSpotId(), parkingSpot);
+        parkingSpotService.updateAvailability(reservation.getSpotId(), true);
 
         // Завершаем бронирование
         reservation.setEndTime(LocalDateTime.now());
         reservation.setStatus("COMPLETED");
 
-        return reservationRepository.save(reservation);
+        Reservation updatedReservation = reservationRepository.save(reservation);
+        return reservationMapper.toDTO(updatedReservation);
     }
 
     @Override
-    public List<Reservation> searchByCarLicensePlate(String licensePlate) {
-        return reservationRepository.findByCarLicensePlate(licensePlate);
+    public List<ReservationDTO> searchByCarLicensePlate(String licensePlate) {
+        List<Reservation> reservations = reservationRepository.findByCarLicensePlate(licensePlate);
+        if (reservations.isEmpty()) {
+            throw new ReservationNotFoundException("Бронирования для автомобиля с номером " + licensePlate + " не найдены");
+        }
+        return reservations.stream().map(reservationMapper::toDTO).toList();
     }
 
     @Override
-    public List<Reservation> searchByOwnerFullName(String ownerName) {
-        return reservationRepository.findByOwnerFullName(ownerName);
+    public List<ReservationDTO> searchByOwnerFullName(String ownerName) {
+        List<Reservation> reservations = reservationRepository.findByOwnerFullName(ownerName);
+        if (reservations.isEmpty()) {
+            throw new ReservationNotFoundException("Бронирования для владельца " + ownerName + " не найдены");
+        }
+        return reservations.stream().map(reservationMapper::toDTO).toList();
     }
 
     @Override
-    public List<Reservation> getActiveReservations() {
-        return reservationRepository.findByStatus("ACTIVE");
+    public List<ReservationDTO> getActiveReservations() {
+        List<Reservation> reservations = reservationRepository.findByStatus("ACTIVE");
+        if (reservations.isEmpty()) {
+            throw new ReservationNotFoundException("Активные бронирования не найдены");
+        }
+        return reservations.stream().map(reservationMapper::toDTO).toList();
     }
 
     @Override
     public void cancelReservation(Long id) {
-        Reservation reservation = getReservationById(id);
+        Reservation reservation = reservationRepository.findById(id)
+                .orElseThrow(() -> new ReservationNotFoundException(id));
 
         if ("ACTIVE".equals(reservation.getStatus())) {
             // Освобождаем место при отмене активного бронирования
-            ParkingSpot parkingSpot = parkingSpotService.getParkingSpotById(reservation.getSpotId());
-            parkingSpot.setIsAvailable(true);
-            parkingSpotService.updateParkingSpot(reservation.getSpotId(), parkingSpot);
+            parkingSpotService.updateAvailability(reservation.getSpotId(), true);
         }
 
         reservation.setStatus("CANCELLED");

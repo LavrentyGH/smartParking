@@ -1,6 +1,13 @@
 package com.parking.parkingmanagement.service.impl;
 
+import com.parking.parkingmanagement.dto.owner.CreateOwnerRequest;
+import com.parking.parkingmanagement.dto.owner.OwnerDTO;
+import com.parking.parkingmanagement.dto.PagedResponse;
+import com.parking.parkingmanagement.dto.owner.UpdateOwnerRequest;
 import com.parking.parkingmanagement.entity.Owner;
+import com.parking.parkingmanagement.exception.OwnerAlreadyExistsException;
+import com.parking.parkingmanagement.exception.OwnerNotFoundException;
+import com.parking.parkingmanagement.mapper.OwnerMapper;
 import com.parking.parkingmanagement.repository.OwnerRepository;
 import com.parking.parkingmanagement.service.OwnerService;
 
@@ -15,45 +22,87 @@ import java.util.List;
 public class OwnerServiceImpl implements OwnerService {
 
     private final OwnerRepository ownerRepository;
+    private final OwnerMapper ownerMapper;
 
-    public OwnerServiceImpl(OwnerRepository ownerRepository) {
+    public OwnerServiceImpl(OwnerRepository ownerRepository, OwnerMapper ownerMapper) {
         this.ownerRepository = ownerRepository;
+        this.ownerMapper = ownerMapper;
     }
 
     @Override
-    public List<Owner> getAllOwners() {
-        return ownerRepository.findAll();
+    public PagedResponse<OwnerDTO> findAllPaged(int page, int size) {
+        PagedResponse<Owner> ownerPage = ownerRepository.findAll(page, size);
+        List<OwnerDTO> ownerDTOs = ownerPage.getContent().stream()
+                .map(ownerMapper::toOwnerDTO)
+                .toList();
+
+        return new PagedResponse<>(ownerDTOs,
+                ownerPage.getCurrentPage(),
+                ownerPage.getTotalPages(),
+                ownerPage.getTotalItems(),
+                ownerPage.getPageSize());
     }
 
     @Override
-    public Owner getOwnerById(Long id) {
-        return ownerRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Владелец не найден с id: " + id));
-    }
-
-    @Override
-    public Owner createOwner(Owner owner) {
-        if (ownerRepository.existsByFullName(owner.getFullName())) {
-            throw new RuntimeException("Владелец с таким ФИО уже существует");
+    public List<OwnerDTO> getAllOwners() {
+        List<Owner> owners = ownerRepository.findAllWithoutPagination();
+        if (owners.isEmpty()) {
+            throw new OwnerNotFoundException("Владельцы не найдены");
         }
-        owner.setCreatedAt(LocalDateTime.now());
-        return ownerRepository.save(owner);
+        return owners.stream().map(ownerMapper::toOwnerDTO).toList();
     }
 
     @Override
-    public Owner updateOwner(Long id, Owner ownerDetails) {
-        Owner owner = getOwnerById(id);
+    public OwnerDTO getOwnerById(Long id) {
+        Owner owner = ownerRepository.findById(id)
+                .orElseThrow(() -> new OwnerNotFoundException(id));
+        return ownerMapper.toOwnerDTO(owner);
+    }
+
+    @Override
+    public OwnerDTO createOwner(CreateOwnerRequest ownerDTO) {
+        if (ownerRepository.existsByFullName(ownerDTO.getFullName())) {
+            throw new OwnerAlreadyExistsException(ownerDTO.getFullName());
+        }
+
+        Owner owner = new Owner();
+        owner.setFullName(ownerDTO.getFullName());
+        owner.setCreatedAt(LocalDateTime.now());
+
+        Owner savedOwner = ownerRepository.save(owner);
+        return ownerMapper.toOwnerDTO(savedOwner);
+    }
+
+    @Override
+    public OwnerDTO updateOwner(Long id, UpdateOwnerRequest ownerDetails) {
+        Owner owner = ownerRepository.findById(id)
+                .orElseThrow(() -> new OwnerNotFoundException(id));
+
+        if (!owner.getFullName().equals(ownerDetails.getFullName()) &&
+            ownerRepository.existsByFullName(ownerDetails.getFullName())) {
+            throw new OwnerAlreadyExistsException(ownerDetails.getFullName());
+        }
+
         owner.setFullName(ownerDetails.getFullName());
-        return ownerRepository.save(owner);
+        Owner updatedOwner = ownerRepository.save(owner);
+        return ownerMapper.toOwnerDTO(updatedOwner);
     }
 
     @Override
     public void deleteOwner(Long id) {
+        if (ownerRepository.findById(id).isEmpty()) {
+            throw new OwnerNotFoundException(id);
+        }
         ownerRepository.deleteById(id);
     }
 
     @Override
-    public List<Owner> searchOwners(String fullName) {
-        return ownerRepository.findByFullName(fullName);
+    public List<OwnerDTO> searchOwners(String fullName) {
+        // Нужно добавить метод в репозиторий для поиска по части имени
+        List<Owner> owners = ownerRepository.findByFullNameContaining(fullName);
+        if (owners.isEmpty()) {
+            throw new OwnerNotFoundException("Владельцы с именем содержащим: " + fullName + " не найдены");
+        }
+        return owners.stream().map(ownerMapper::toOwnerDTO).toList();
     }
 }

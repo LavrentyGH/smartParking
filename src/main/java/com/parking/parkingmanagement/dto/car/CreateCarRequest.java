@@ -1,4 +1,4 @@
-package com.parking.parkingmanagement.dto;
+package com.parking.parkingmanagement.dto.car;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -10,7 +10,6 @@ public class CreateCarRequest {
     @NotNull(message = "Owner ID is required")
     private Long ownerId;
 
-    // Конструкторы
     public CreateCarRequest() {}
 
     public CreateCarRequest(String licensePlate, Long ownerId) {
@@ -18,7 +17,6 @@ public class CreateCarRequest {
         this.ownerId = ownerId;
     }
 
-    // Геттеры и сеттеры
     public String getLicensePlate() {
         return licensePlate;
     }

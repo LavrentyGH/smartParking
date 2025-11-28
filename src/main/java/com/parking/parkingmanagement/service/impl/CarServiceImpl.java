@@ -1,8 +1,13 @@
 package com.parking.parkingmanagement.service.impl;
 
-import com.parking.parkingmanagement.dto.CreateCarRequest;
+import com.parking.parkingmanagement.dto.owner.OwnerDTO;
+import com.parking.parkingmanagement.dto.car.CarDTO;
+import com.parking.parkingmanagement.dto.car.CreateCarRequest;
+import com.parking.parkingmanagement.dto.PagedResponse;
 import com.parking.parkingmanagement.entity.Car;
-import com.parking.parkingmanagement.entity.Owner;
+import com.parking.parkingmanagement.exception.CarAlreadyExistsException;
+import com.parking.parkingmanagement.exception.CarNotFoundException;
+import com.parking.parkingmanagement.mapper.CarMapper;
 import com.parking.parkingmanagement.repository.CarRepository;
 import com.parking.parkingmanagement.service.CarService;
 import com.parking.parkingmanagement.service.OwnerService;
@@ -20,54 +25,60 @@ public class CarServiceImpl implements CarService {
 
     private final OwnerService ownerService;
 
-    public CarServiceImpl(CarRepository carRepository, OwnerService ownerService) {
+    private final CarMapper carMapper;
+
+    public CarServiceImpl(CarRepository carRepository, OwnerService ownerService, CarMapper carMapper) {
         this.carRepository = carRepository;
         this.ownerService = ownerService;
+        this.carMapper = carMapper;
     }
 
     @Override
-    public List<Car> getAllCars() {
-        return carRepository.findAllWithOwner();
+    public List<CarDTO> getAllCars() {
+        List<Car> cars = carRepository.findAllWithOwner();
+        if (cars.isEmpty()) {
+                throw new CarNotFoundException("Машины не найдены");
+        }
+        return cars.stream().map(carMapper::carToCarDTO).toList();
     }
 
     @Override
-    public Car getCarById(Long id) {
-        return carRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Автомобиль не найден с id: " + id));
+    public CarDTO getCarById(Long id) {
+        return carMapper.carToCarDTO(getCarByIdWithoutDTO(id));
     }
 
+
     @Override
-    public Car createCar(CreateCarRequest createCarRequest) {
-        if (carRepository.findByLicensePlate(createCarRequest.getLicensePlate()).contains(createCarRequest.getLicensePlate())) {
-            throw new RuntimeException("Car with license plate " + createCarRequest.getLicensePlate() + " already exists");
+    public CarDTO createCar(CreateCarRequest createCarRequest) {
+        if (carRepository.findByLicensePlate(createCarRequest.getLicensePlate())
+                .isPresent()) {
+            throw new CarAlreadyExistsException(createCarRequest.getLicensePlate());
         }
 
-        Owner owner = ownerService.getOwnerById(createCarRequest.getOwnerId());
-
-        Car car = new Car();
-        car.setLicensePlate(createCarRequest.getLicensePlate());
-        car.setOwnerId(owner.getId());
+        Car car = carMapper.toEntity(createCarRequest);
         car.setCreatedAt(LocalDateTime.now());
-        return carRepository.save(car);
+        carRepository.save(car);
+        return carMapper.carToCarDTO(car);
     }
 
     @Override
-    public Car updateCar(Long id, Car carDetails) {
-        Car car = getCarById(id);
+    public CarDTO updateCar(Long id, Car carDetails) {
+        Car car = getCarByIdWithoutDTO(id);
 
         if (!car.getLicensePlate().equals(carDetails.getLicensePlate()) &&
                 carRepository.existsByLicensePlate(carDetails.getLicensePlate())) {
-            throw new RuntimeException("Автомобиль с таким номером уже существует");
+            throw new CarAlreadyExistsException("Автомобиль с таким номером "
+                    + carDetails.getLicensePlate() + " уже существует");
         }
 
         car.setLicensePlate(carDetails.getLicensePlate());
 
         if (!car.getOwnerId().equals(carDetails.getOwnerId())) {
-            Owner owner = ownerService.getOwnerById(carDetails.getOwnerId());
+            OwnerDTO owner = ownerService.getOwnerById(carDetails.getOwnerId());
             car.setOwnerId(owner.getId());
         }
-
-        return carRepository.save(car);
+        carRepository.save(car);
+        return carMapper.carToCarDTO(car);
     }
 
     @Override
@@ -76,7 +87,35 @@ public class CarServiceImpl implements CarService {
     }
 
     @Override
-    public List<Car> searchCars(String licensePlate) {
-        return carRepository.findByLicensePlate(licensePlate);
+    public CarDTO searchCars(String licensePlate) {
+        Car car = carRepository.findByLicensePlate(licensePlate)
+                .orElseThrow(() ->
+                new CarNotFoundException("Машин с номером: " + licensePlate + " не найдены"));
+
+        return carMapper.carToCarDTO(car);
+    }
+
+    @Override
+    public PagedResponse<CarDTO> findAllPaged(int page, int size) {
+
+        PagedResponse<Car> carPage = carRepository.findAllPaged(page, size);
+        if (carPage.getContent().isEmpty()) {
+            throw new CarNotFoundException("Ошибка в поиске автомобиля");
+        }
+
+        List<CarDTO> carDTOs = carPage.getContent().stream()
+                .map(carMapper::carToCarDTO)
+                .toList();
+
+        return new PagedResponse<>(carDTOs,
+                carPage.getCurrentPage(),
+                carPage.getTotalPages(),
+                carPage.getTotalItems(),
+                carPage.getPageSize());
+    }
+
+    private Car getCarByIdWithoutDTO(Long id) {
+        return (carRepository.findById(id)
+                .orElseThrow(() -> new CarNotFoundException(id)));
     }
 }

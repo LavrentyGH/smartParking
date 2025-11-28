@@ -1,7 +1,9 @@
 package com.parking.parkingmanagement.controller;
 
 import com.parking.parkingmanagement.dto.ApiResponse;
-import com.parking.parkingmanagement.dto.CreateCarRequest;
+import com.parking.parkingmanagement.dto.car.CarDTO;
+import com.parking.parkingmanagement.dto.car.CreateCarRequest;
+import com.parking.parkingmanagement.dto.PagedResponse;
 import com.parking.parkingmanagement.entity.Car;
 import com.parking.parkingmanagement.service.CarService;
 import jakarta.validation.Valid;
@@ -23,51 +25,38 @@ public class CarController {
     }
 
     @GetMapping
-    public List<Car> getAllCars() {
-        return carService.getAllCars();
+    public ApiResponse<List<CarDTO>> getAllCars() {
+        List<CarDTO> cars = carService.getAllCars();
+        return ApiResponse.success(cars, "Автомобили получены успешно");
+    }
+
+    @GetMapping("/paged")
+    public ApiResponse<PagedResponse<CarDTO>> getCarsPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size) {
+
+        PagedResponse<CarDTO> cars = carService.findAllPaged(page, size);
+        return ApiResponse.success(cars, "Автомобили получены успешно");
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<Car>> getCarById(@PathVariable Long id) {
-        try {
-            Car car = carService.getCarById(id);
-            return ResponseEntity.ok(ApiResponse.success(car, "Car retrieved successfully"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("CAR_NOT_FOUND", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Failed to retrieve car: " + e.getMessage()));
-        }
+    public ApiResponse<CarDTO> getCarById(@PathVariable Long id) {
+            CarDTO car = carService.getCarById(id);
+            return ApiResponse.success(car, "Car retrieved successfully");
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<Car>> createCar(@Valid @RequestBody CreateCarRequest createCarRequest) {
-        try {
-            Car car = carService.createCar(createCarRequest);
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(ApiResponse.success(car, "Car created successfully"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponse.error("CAR_CREATION_ERROR", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Failed to create car: " + e.getMessage()));
-        }
+    public ResponseEntity<ApiResponse<CarDTO>> createCar(@Valid @RequestBody CreateCarRequest createCarRequest) {
+        CarDTO car = carService.createCar(createCarRequest);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(car, "Car created successfully"));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<Car>> updateCar(@PathVariable Long id, @Valid @RequestBody Car carDetails) {
-        try {
-            Car car = carService.updateCar(id, carDetails);
-            return ResponseEntity.ok(ApiResponse.success(car, "Car updated successfully"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("CAR_NOT_FOUND", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Failed to update car: " + e.getMessage()));
-        }
+    public ResponseEntity<ApiResponse<CarDTO>> updateCar(@PathVariable Long id, @Valid @RequestBody Car carDetails) {
+        CarDTO car = carService.updateCar(id, carDetails);
+        return ResponseEntity.ok(ApiResponse.success(car, "Car updated successfully"));
+
     }
 
     @DeleteMapping("/{id}")
@@ -85,13 +74,10 @@ public class CarController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<List<Car>>> searchCars(@RequestParam String licensePlate) {
-        try {
-            List<Car> cars = carService.searchCars(licensePlate);
-            return ResponseEntity.ok(ApiResponse.success(cars, "Cars search completed"));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Search failed: " + e.getMessage()));
-        }
+    public ResponseEntity<ApiResponse<CarDTO>> searchCars(@RequestParam String licensePlate) {
+
+        CarDTO cars = carService.searchCars(licensePlate);
+        return ResponseEntity.ok(ApiResponse.success(cars, "Cars search completed"));
+
     }
 }

@@ -1,20 +1,24 @@
 package com.parking.parkingmanagement.service;
 
-import com.parking.parkingmanagement.dto.CreateCarRequest;
+import com.parking.parkingmanagement.dto.car.CarDTO;
+import com.parking.parkingmanagement.dto.car.CreateCarRequest;
+import com.parking.parkingmanagement.dto.PagedResponse;
 import com.parking.parkingmanagement.entity.Car;
 
 import java.util.List;
 
 public interface CarService {
-    List<Car> getAllCars();
+    List<CarDTO> getAllCars();
 
-    Car getCarById(Long id);
+    CarDTO getCarById(Long id);
 
-    Car createCar(CreateCarRequest createCarRequest);
+    CarDTO createCar(CreateCarRequest createCarRequest);
 
-    Car updateCar(Long id, Car carDetails);
+    CarDTO updateCar(Long id, Car carDetails);
 
     void deleteCar(Long id);
 
-    List<Car> searchCars(String licensePlate);
+    CarDTO searchCars(String licensePlate);
+
+    PagedResponse<CarDTO> findAllPaged(int page, int size);
 }

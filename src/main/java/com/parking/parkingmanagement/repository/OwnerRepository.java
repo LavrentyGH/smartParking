@@ -1,5 +1,6 @@
 package com.parking.parkingmanagement.repository;
 
+import com.parking.parkingmanagement.dto.PagedResponse;
 import com.parking.parkingmanagement.entity.Owner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -26,7 +27,20 @@ public class OwnerRepository {
         return owner;
     };
 
-    public List<Owner> findAll() {
+    public PagedResponse<Owner> findAll(int page, int size) {
+        int offset = page * size;
+
+        String sql = "SELECT * FROM owners ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        List<Owner> content = jdbcTemplate.query(sql, rowMapper, size, offset);
+
+        String countSql = "SELECT COUNT(*) FROM owners";
+        Long totalItems = jdbcTemplate.queryForObject(countSql, Long.class);
+        int totalPages = (int) Math.ceil((double) totalItems / size);
+
+        return new PagedResponse<>(content, page, totalPages, totalItems, size);
+    }
+
+    public List<Owner> findAllWithoutPagination() {
         String sql = "SELECT * FROM owners ORDER BY created_at DESC";
         return jdbcTemplate.query(sql, rowMapper);
     }
@@ -37,9 +51,15 @@ public class OwnerRepository {
         return owners.stream().findFirst();
     }
 
-    public List<Owner> findByFullName(String fullName) {
+    public PagedResponse<Owner> findByFullName(String fullName, int page, int size) {
+        int offset = page * size;
         String sql = "SELECT * FROM owners WHERE full_name ILIKE ? ORDER BY full_name";
-        return jdbcTemplate.query(sql, rowMapper, "%" + fullName + "%");
+        List<Owner> content  = jdbcTemplate.query(sql, rowMapper, fullName);
+
+        String countSql = "SELECT COUNT(*) FROM owners";
+        Long totalItems = jdbcTemplate.queryForObject(countSql, Long.class);
+        int totalPages = (int) Math.ceil((double) totalItems / size);
+        return new PagedResponse<>(content, page, totalPages, totalItems, size);
     }
 
     public Owner save(Owner owner) {
@@ -65,5 +85,10 @@ public class OwnerRepository {
         String sql = "SELECT COUNT(*) FROM owners WHERE full_name = ?";
         Integer count = jdbcTemplate.queryForObject(sql, Integer.class, fullName);
         return count != null && count > 0;
+    }
+
+    public List<Owner> findByFullNameContaining(String fullName) {
+        String sql = "SELECT * FROM owners WHERE full_name ILIKE ? ORDER BY full_name";
+        return jdbcTemplate.query(sql, rowMapper, "%" + fullName + "%");
     }
 }

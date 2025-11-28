@@ -1,25 +1,20 @@
 package com.parking.parkingmanagement.service;
 
-import com.parking.parkingmanagement.entity.Reservation;
+import com.parking.parkingmanagement.dto.PagedResponse;
+import com.parking.parkingmanagement.dto.reservation.CreateReservationRequest;
+import com.parking.parkingmanagement.dto.reservation.ReservationDTO;
 
 import java.util.List;
 
 public interface ReservationService {
-    List<Reservation> getAllReservations();
-
-    Reservation getReservationById(Long id);
-
-    Reservation createReservation(Reservation reservation);
-
-    Reservation markAsPaid(Long id);
-
-    Reservation freeSpot(Long id);
-
-    List<Reservation> searchByCarLicensePlate(String licensePlate);
-
-    List<Reservation> searchByOwnerFullName(String ownerName);
-
-    List<Reservation> getActiveReservations();
-
+    PagedResponse<ReservationDTO> findAllPaged(int page, int size);
+    List<ReservationDTO> getAllReservations();
+    ReservationDTO getReservationById(Long id);
+    ReservationDTO createReservation(CreateReservationRequest request);
+    ReservationDTO markAsPaid(Long id);
+    ReservationDTO freeSpot(Long id);
+    List<ReservationDTO> searchByCarLicensePlate(String licensePlate);
+    List<ReservationDTO> searchByOwnerFullName(String ownerName);
+    List<ReservationDTO> getActiveReservations();
     void cancelReservation(Long id);
 }
