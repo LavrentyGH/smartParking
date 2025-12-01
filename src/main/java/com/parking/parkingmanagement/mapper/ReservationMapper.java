@@ -13,7 +13,7 @@ public class ReservationMapper {
         dto.setSpotId(reservation.getSpotId());
         dto.setStartTime(reservation.getStartTime());
         dto.setEndTime(reservation.getEndTime());
-        dto.setPaid(reservation.getIsPaid());
+        dto.setIsPaid(reservation.getIsPaid());
         dto.setStatus(reservation.getStatus());
         dto.setCreatedAt(reservation.getCreatedAt());
         dto.setCarLicensePlate(reservation.getCarLicensePlate());
